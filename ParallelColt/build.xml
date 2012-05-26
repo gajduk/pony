@@ -11,7 +11,12 @@ See the target "usage" further below for instructions on how to build the softwa
 <!-- ================================================================= -->
 <!-- NOTE: all directories are relative to parallelcolt/                       -->
 <!-- ================================================================= -->
-<project name="parallelcolt" default="help" basedir=".">
+<project name="parallelcolt" default="help" basedir="."
+         xmlns:artifact="antlib:org.apache.maven.artifact.ant">
+    <path id="maven-ant-tasks.classpath" path="lib/maven-ant-tasks-2.1.3.jar" />
+    <typedef resource="org/apache/maven/artifact/ant/antlib.xml"
+       uri="antlib:org.apache.maven.artifact.ant"
+       classpathref="maven-ant-tasks.classpath" />
 	
 	<property name="version" value="0.9.4" />
 
@@ -195,5 +200,13 @@ Further individual targets used internally by above targets:
 		  <test name="cern.colt.AllTests"/>
 		</junit>
     </target>
+
+    <artifact:pom id="parallelcolt_pom" file="pom.xml" />
+
+	<target name="mvn-install" depends="jar">
+      <artifact:install file="parallelcolt-0.9.4.jar">
+        <pom refid="parallelcolt_pom"/>
+      </artifact:install>
+	</target>
 
 </project>
