@@ -13,29 +13,55 @@
    [cern.colt.matrix.tfloat.impl DenseFloatMatrix2D]))
 
 (defn make-matrix [^long rows ^long cols]
-  (proxy [DenseDoubleMatrix2D IPersistentCollection
-          IEditableCollection]
-      [rows cols]
-    ;; Stub
-    (asTransient []
-      nil)
-    (count []
-      (let [rows (.rows this) cols (.columns this)]
-        (* rows cols)))
-    ;; cons is no-op
-    (cons [o] this)
-    (empty [] nil)
-    (equiv [o]
-      (when (instance? AbstractMatrix2D o)
-        (and (= (.rows this) (.rows o))
-             (= (.columns this) (.columns o))
-             (every?
-              (fn [[r c]]
-                 (= (.get this r c)
-                    (.get o r c)))
-               (for [r (range (.rows this))
-                     c (range (.columns this))]
-                 [r c])))))))
+  (let [edit (atom nil)
+        ensure-editable
+        (fn []
+          (condp = @edit
+            (Thread/currentThread) true
+            nil
+            (throw (IllegalAccessError.
+                    "Transient used after persistent! call"))
+            (throw (IllegalAccessError.
+                    "Transient used by non-owner thread"))))]
+    [(proxy [DenseDoubleMatrix2D
+             IPersistentCollection
+             IEditableCollection
+             ITransientCollection]
+         [rows cols]
+       (persistent []
+         (do (swap! edit (fn [_] nil))
+             this))
+       ;; conj is no-op
+       (conj [] this)
+       (asTransient []
+         (do (swap! edit (fn [_] (Thread/currentThread)))
+             this))
+       (count []
+         (let [rows (.rows this) cols (.columns this)]
+           (* rows cols)))
+       ;; cons is no-op
+       (cons [o] this)
+       (empty [] nil)
+       (equiv [o]
+         (when (instance? AbstractMatrix2D o)
+           (and (= (.rows this) (.rows o))
+                (= (.columns this) (.columns o))
+                (every?
+                 (fn [[r c]]
+                   (= (.get this r c)
+                      (.get o r c)))
+                 (for [r (range (.rows this))
+                       c (range (.columns this))]
+                   [r c]))))))
+     ensure-editable]))
+
+(let [[m ensure-editable] (make-matrix 4 3)]
+  (do
+    (println (ensure-editable))
+    (.asTransient m)
+    (println (ensure-editable))
+    (.persistent m)
+    (println (ensure-editable))))
 
 (defprotocol IMatrix
   "Matrices,dense or sparse and float or double and 1D, 2D or 3D."
