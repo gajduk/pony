@@ -13,6 +13,26 @@
 (defn zeros [^long rows ^long cols]
   (DenseDoubleMatrix2D. rows cols))
 
+(defn ones [^long rows ^long cols]
+  (.assign (DenseDoubleMatrix2D. rows cols) 1.0))
+
+(defn row-view [^AbstractMatrix2D m ^long row]
+  (.viewRow m row))
+
+(defn assign [^AbstractMatrix2D m vals]
+  {:pre [(let [rows (.rows m) cols (.columns m)]
+           (= (* rows cols) (count vals)))]}
+  (let [rows (.rows m) cols (.columns m)
+        vss (partition cols vals)]
+    (dorun
+     (map
+      (fn [r vs]
+        (.assign
+         (row-view m r)
+         (double-array vs)))
+      (range rows) vss))
+    m))
+
 ;; ## Reconciling the difference between a mutable Java library and an
 ;; ## immutable Clojure style?
 ;; How exactly can a Clojure-like wrapper be built when ParallelColt
