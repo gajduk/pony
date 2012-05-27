@@ -4,12 +4,56 @@
 ;; (to allow full usage of it) while being as close to Clojure as possible.
 
 (ns pony.core
-  (:import [cern.colt.matrix AbstractMatrix AbstractMatrix2D]
-           [cern.colt.matrix.tdouble DoubleMatrix2D]
-           [cern.colt.matrix.tdouble.impl DenseDoubleMatrix2D]
-           [cern.colt.matrix.tfloat FloatMatrix2D]
-           [cern.colt.matrix.tfloat.impl DenseFloatMatrix2D]))
+  (:import
+   [clojure.lang IPersistentCollection IEditableCollection ITransientCollection]
+   [cern.colt.matrix AbstractMatrix AbstractMatrix2D]
+   [cern.colt.matrix.tdouble DoubleMatrix2D]
+   [cern.colt.matrix.tdouble.impl DenseDoubleMatrix2D]
+   [cern.colt.matrix.tfloat FloatMatrix2D]
+   [cern.colt.matrix.tfloat.impl DenseFloatMatrix2D]))
 
+(defn make-matrix [^long rows ^long cols]
+  (proxy [DenseDoubleMatrix2D IPersistentCollection
+          IEditableCollection]
+      [rows cols]
+    ;; Stub
+    (asTransient []
+      nil)
+    (count []
+      (let [rows (.rows this) cols (.columns this)]
+        (* rows cols)))
+    ;; cons is no-op
+    (cons [o] this)
+    (empty [] nil)
+    (equiv [o]
+      (when (instance? AbstractMatrix2D o)
+        (and (= (.rows this) (.rows o))
+             (= (.columns this) (.columns o))
+             (every?
+              (fn [[r c]]
+                 (= (.get this r c)
+                    (.get o r c)))
+               (for [r (range (.rows this))
+                     c (range (.columns this))]
+                 [r c])))))))
+
+(defprotocol IMatrix
+  "Matrices,dense or sparse and float or double and 1D, 2D or 3D."
+  (zeros [dims] "Return a matrix of the same type, filled with zeros")
+  (ones [dims] "Return a matrix of the same type, filled with ones")
+  )
+
+;; ## A deftype-based solution
+;; Which protocols should be implemented?
+;; - IPersistentMap
+;; - ITransientCollection
+;; Look at (ancestors (class {}))
+;; The best thing to do would be to implement (transient!) and
+;; (persistent) such that when the matrix is transient,
+;; modification operations are allowed and when it is persistent,
+;; those modification operations are not available.
+
+;; ## Functions for creating matrices
 (defn zeros [^long rows ^long cols]
   (DenseDoubleMatrix2D. rows cols))
 
