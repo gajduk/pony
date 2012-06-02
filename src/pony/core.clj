@@ -12,7 +12,30 @@
    [cern.colt.matrix.tfloat FloatMatrix2D]
    [cern.colt.matrix.tfloat.impl DenseFloatMatrix2D]))
 
+;; TODO: Make a protocol for matrices
+;; TODO: Reify the output of make-matrix into a type that satifies the
+;; TODO: protocol for matrices.
+
+(defprotocol IMatrix
+  "Matrices,dense or sparse and float or double and 1D, 2D or 3D."
+  (assign [this value] "Assign value to all cells in matrix")
+  (to-string [this] "Print the matrix")
+  (copy [this] "Make a deep copy of the matrix")
+  (arg-max [this]))
+
+
+(defrecord PonyMatrix2D
+    "INTERNAL: Don't even think of instantiating one of these directly!"
+    [])
+
 (defn make-matrix [^long rows ^long cols]
+  (let [m (DenseDoubleMatrix2D. rows cols)]
+    (make-matrix-from-matrix m)))
+
+(defn make-matrix-from-matrix [^AbstractMatrix2D m]
+  "Make a reified object that wraps the cern.colt.matrix.AbstractMatrix2D
+  and implements Clojure interfaces that allow it to act as a
+  persistent, editable or transient collection."
   (let [edit (atom nil)
         ensure-editable
         (fn []
@@ -20,54 +43,62 @@
             (Thread/currentThread) true
             nil
             (throw (IllegalAccessError.
-                    "Transient used after persistent! call"))
+                    "Transient method called on persistent matrix"))
             (throw (IllegalAccessError.
                     "Transient used by non-owner thread"))))]
-    [(proxy [DenseDoubleMatrix2D
-             IPersistentCollection
-             IEditableCollection
-             ITransientCollection]
-         [rows cols]
-       (persistent []
+    (reify
+      IMatrix
+      (assign [this value]
+        (do (ensure-editable)
+            (.assign m value)
+            this))
+      (to-string [_]
+        (.toString m))
+      (copy [_]
+        (make-matrix-from-matrix (.copy m)))
+      (arg-matmax [_]
+        (let [[max & coords] (.getMaxLocation m)]
+          [max (map long coords)]))
+      
+      IPersistentCollection
+      (count [_]
+        (let [rows (.rows m) cols (.columns m)]
+          (* rows cols)))
+      ;; cons is no-op
+      (cons [this o] this)
+      (empty [_] nil)
+      (equiv [_ o]
+        (when (instance? AbstractMatrix2D o)
+          (and (= (.rows m) (.rows o))
+               (= (.columns m) (.columns o))
+               (every?
+                (fn [[r c]]
+                  (= (.get m r c)
+                     (.get o r c)))
+                (for [r (range (.rows m))
+                      c (range (.columns m))]
+                  [r c])))))
+      
+      IEditableCollection
+      (asTransient [this]
+        (do (swap! edit (fn [_] (Thread/currentThread)))
+            this))
+      
+      ITransientCollection
+      (persistent [this]
          (do (swap! edit (fn [_] nil))
              this))
        ;; conj is no-op
-       (conj [] this)
-       (asTransient []
-         (do (swap! edit (fn [_] (Thread/currentThread)))
-             this))
-       (count []
-         (let [rows (.rows this) cols (.columns this)]
-           (* rows cols)))
-       ;; cons is no-op
-       (cons [o] this)
-       (empty [] nil)
-       (equiv [o]
-         (when (instance? AbstractMatrix2D o)
-           (and (= (.rows this) (.rows o))
-                (= (.columns this) (.columns o))
-                (every?
-                 (fn [[r c]]
-                   (= (.get this r c)
-                      (.get o r c)))
-                 (for [r (range (.rows this))
-                       c (range (.columns this))]
-                   [r c]))))))
-     ensure-editable]))
+       (conj [this o] this))))
 
-(let [[m ensure-editable] (make-matrix 4 3)]
-  (do
-    (println (ensure-editable))
-    (.asTransient m)
-    (println (ensure-editable))
-    (.persistent m)
-    (println (ensure-editable))))
-
-(defprotocol IMatrix
-  "Matrices,dense or sparse and float or double and 1D, 2D or 3D."
-  (zeros [dims] "Return a matrix of the same type, filled with zeros")
-  (ones [dims] "Return a matrix of the same type, filled with ones")
-  )
+(let [m (make-matrix 4 3)
+      mc (copy m)]
+  (-> m
+      transient
+      (assign 1.0)
+      persistent!)
+  (println (to-string m))
+  (println (to-string mc)))
 
 ;; ## A deftype-based solution
 ;; Which protocols should be implemented?
