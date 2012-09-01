@@ -19,7 +19,8 @@
 (defprotocol IEditable
   (make-uneditable [this])
   (make-editable [this])
-  (ensure-editable [this]))
+  (ensure-editable [this])
+  (copy [this] "Make a deep copy and create a new lock"))
 
 (defmacro make-editable-type-fns [edit-lock-sym]
   `{:make-uneditable
@@ -57,8 +58,10 @@
 
 (declare make-matrix-from-matrix)
 
-(defmacro def-lockable-type
-  [name locked-member persistent-col-fns ifaces & body]
+(defmacro def-editable-type
+  [name locked-member
+   persistent-col-fns
+   ifaces & body]
   `(do
      (deftype ~name [~locked-member edit-lock#]
        IEditableCollection
@@ -74,8 +77,14 @@
        IPersistentCollection
        ~@persistent-col-fns
        ~@ifaces)
-     (extend ~name IEditable
-             (make-editable-type-fns edit-lock#))
+     (extend
+         ~name IEditable
+         (merge
+          (make-editable-type-fns edit-lock#)
+          {:copy
+           (fn [this#]
+             (let [locked-member-deep-copy# (deep-copy this#)]
+               (new ~name locked-member-deep-copy# (atom nil))))}))
      ~(when body `(extend-type ~name ~@body))
      ~name))
 
@@ -86,7 +95,7 @@
   "Matrices,dense or sparse and float or double and 1D, 2D or 3D."
   (assign [this value] "Assign value to all cells in matrix")
   (to-string [this] "Print the matrix")
-  (copy [this] "Make a deep copy of the matrix")
+  (deep-copy [this] "Make a deep copy of the underlying matrix")
   (arg-matmax [this]))
 
 (def matrix-impl
@@ -97,7 +106,7 @@
          this))
    :to-string
    (fn [this] (.toString (.m this)))
-   :copy
+   :deep-copy
    (fn [this] (.copy (.m this)))
    :arg-matmax
    (fn [this]
@@ -108,7 +117,7 @@
   (dot-prod [this ^Matrix1D that])
   (sum [this]))
 
-(def-lockable-type PonyMatrix1D m
+(def-editable-type PonyMatrix1D m
   [;; cons is no-op
    (cons [this o] this)
    (empty [_] nil)
@@ -127,7 +136,7 @@
 (extend PonyMatrix1D Matrix matrix-impl)
 
 ;; (defprotocol Matrix2D [])
-(def-lockable-type PonyMatrix2D m
+(def-editable-type PonyMatrix2D m
   [ ;; cons is no-op
    (cons [this o] this)
    (empty [_] nil)
