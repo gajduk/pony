@@ -154,7 +154,7 @@
   (dot-prod [this ^Matrix1D that])
   (sum [this]))
 
-(def-editable-type PonyMatrix1D ^AbstractMatrix2D m
+(def-editable-type PonyMatrix1D ^AbstractMatrix1D m
   [;; cons is no-op
    (cons [this o]
          (with-readable this
