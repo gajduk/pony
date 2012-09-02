@@ -105,6 +105,7 @@
   "Matrices,dense or sparse and float or double and 1D, 2D or 3D."
   (assign [this value] "Assign value to all cells in matrix")
   (to-string [this] "Print the matrix")
+  (to-array [this] "Turn the matrix into an array")
   (deep-copy [this] "Make a deep copy of the underlying matrix")
   (arg-matmax [this]))
 
@@ -149,11 +150,19 @@
                           (= (.index matrix i) (.index o i)))
                         (range (.size matrix)))))))))]
   [Counted
-   (count [this] (with-readable this (.size (.m this))))]
+   (count [this] (with-readable this (.size (.m this))))
+   clojure.lang.Seqable
+   (seq [this] (seq (to-array this)))]
   Matrix1D
   (dot-prod [this that] (with-readable (.zDotProduct (.m this) that)))
   (sum [this] (with-readable (.zSum (.m this)))))
-(extend PonyMatrix1D Matrix matrix-impl)
+(extend PonyMatrix1D Matrix
+        (merge
+         {:to-array
+          (fn [this]
+            (with-readable this
+              (-> this .m .toArray)))}
+         matrix-impl))
 
 ;; (defprotocol Matrix2D [])
 (def-editable-type PonyMatrix2D ^AbstractMatrix2D m
@@ -178,8 +187,15 @@
    (count [this]
           (let [matrix (.m this)
                 rows (.rows matrix) cols (.columns matrix)]
-            (* rows cols)))])
-(extend PonyMatrix2D Matrix matrix-impl)
+            (* rows cols)))
+   clojure.lang.Seqable
+   (seq [this] (map seq (seq (to-array this))))])
+(extend PonyMatrix2D Matrix
+        {:to-array
+          (fn [this]
+            (with-readable this
+              (-> this .m .toArray)))}
+        matrix-impl)
 
 (defprotocol ColtMatrix
   (wrap-colt-matrix [^AbstractMatrix colt-matrix]

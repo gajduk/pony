@@ -8,8 +8,5 @@
         (-> m
             transient
             (assign 1.0)
-            persistent!)
-        matrix (. assigned-m m)]
-    (is
-     (every? #(= %1 1.0)
-             (for [r (range 4) c (range 3)] (.get matrix r c))))))
+            persistent!)]
+    (is (every? #(= %1 1.0) (flatten (seq assigned-m))))))
