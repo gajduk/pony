@@ -81,7 +81,7 @@
    persistent-col-fns
    ifaces & body]
   `(do
-     (deftype ~name [~locked-member edit-lock#]
+     (deftype ~name [~locked-member ~'edit-lock]
        IEditableCollection
        (asTransient [this#]
          (copy-for-current-thread this#))
@@ -96,7 +96,7 @@
      (extend
          ~name IEditable
          (merge
-          (make-editable-type-fns edit-lock#)
+          (make-editable-type-fns ~'edit-lock)
           ;; Generate functions to perform deep copies of editable
           ;; type, including a function that performs a deep copy and
           ;; then sets the edit thread to the current thread. This is
