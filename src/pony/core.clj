@@ -14,6 +14,16 @@
    [cern.colt.matrix.tfloat FloatMatrix2D]
    [cern.colt.matrix.tfloat.impl DenseFloatMatrix2D]))
 
+;; ## IEditable is a protocol for mutable data structures
+;; IEditables are immutable, but locked mutable copies can be made of
+;; them. These mutable copies can only be read from or written to by
+;; the thread that created them.
+;; IEditable can be locked to a particular thread by calling
+;; copy-for-current-thread. Read/write operations can then be done on
+;; it. It can be unlocked by calling make-uneditable. Write operations
+;; then will fail and read operations will only pass if the IEditable
+;; is not writeable by anyone else. All read or write operations must
+;; be guarded by ensure-readable and ensure-editable, respectively.
 (defprotocol IEditable
   (make-uneditable [this]
     "Release the object for editing by setting edit-thread atomically
@@ -28,7 +38,9 @@
   (copy-for-current-thread [this]
     "Make a deep copy and create a new lock set to current thread"))
 
-(defmacro make-editable-type-fns [edit-lock-sym]
+(defmacro make-editable-type-fns
+  "Builds unlock and check-lock functions for IEditable"
+  [edit-lock-sym]
   `{:make-uneditable
     (fn [this#]
       (swap!
@@ -60,6 +72,11 @@
                 "Transient is not readable"))))})
 
 (defmacro def-editable-type
+  "Builds code to define an editable type that locks the specified
+  member, implementing all required interfaces and allowing the caller
+  to specific any other desired interfaces. Type-specific functions
+  for IPersistentCollection must also be provided. Additional
+  protocols to extend this type are specified in the body."
   [name locked-member
    persistent-col-fns
    ifaces & body]
@@ -80,6 +97,10 @@
          ~name IEditable
          (merge
           (make-editable-type-fns edit-lock#)
+          ;; Generate functions to perform deep copies of editable
+          ;; type, including a function that performs a deep copy and
+          ;; then sets the edit thread to the current thread. This is
+          ;; how mutable copies of the editable type are created.
           (letfn
               [(copy-for-thread# [thread# editable#]
                 (let [locked-member-deep-copy# (deep-copy editable#)]
