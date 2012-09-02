@@ -72,7 +72,7 @@
    persistent-col-fns
    ifaces & body]
   `(do
-     (deftype ~name [~locked-member ~'edit-lock]
+     (deftype ~name [~locked-member edit-lock#]
        IEditableCollection
        (asTransient [this#]
          (copy-for-current-thread this#))
@@ -87,7 +87,7 @@
      (extend
          ~name IEditable
          (merge
-          (make-editable-type-fns ~'edit-lock)
+          (make-editable-type-fns edit-lock#)
           (letfn
               [(copy-for-thread# [thread# editable#]
                 (let [locked-member-deep-copy# (deep-copy editable#)]
@@ -205,9 +205,6 @@
           transient
           (assign 1.0)
           persistent!)]
-  (println (. m edit-lock))
-  (println (. mc edit-lock))
-  (println (. assigned-m edit-lock))
   (println (to-string m))
   (println (to-string mc))
   (println (to-string assigned-m)))
