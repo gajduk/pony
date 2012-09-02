@@ -200,14 +200,3 @@
     (wrap-colt-matrix m)))
 
 (set! *warn-on-reflection* true)
-
-(let [m (make-matrix 4 3)
-      mc (copy m)
-      assigned-m
-      (-> m
-          transient
-          (assign 1.0)
-          persistent!)]
-  (println (to-string m))
-  (println (to-string mc))
-  (println (to-string assigned-m)))
