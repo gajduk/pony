@@ -1,7 +1,9 @@
 ;; ## A thin wrapper around ParallelColt
 ;; Pony is a wrapper around the ParallelColt library
 ;; that is intended to be as close as possible to the original library
-;; (to allow full usage of it) while being as close to Clojure as possible.
+;; (to allow full usage of it) while being as close to Clojure idioms
+;; as possible.
+;; TODO: Need to figure out how to use/handle views.
 
 (ns pony.core
   (:import
@@ -11,10 +13,6 @@
    [cern.colt.matrix.tdouble.impl DenseDoubleMatrix1D DenseDoubleMatrix2D]
    [cern.colt.matrix.tfloat FloatMatrix2D]
    [cern.colt.matrix.tfloat.impl DenseFloatMatrix2D]))
-
-;; TODO: Make a protocol for matrices
-;; TODO: Reify the output of make-matrix into a type that satifies the
-;; TODO: protocol for matrices.
 
 (defprotocol IEditable
   (make-uneditable [this]
@@ -30,10 +28,6 @@
   (copy-for-current-thread [this]
     "Make a deep copy and create a new lock set to current thread"))
 
-;; Need to provide wrapper functions for read functions and write
-;; functions.
-
-;; Need to figure out how to use/handle views.
 (defmacro make-editable-type-fns [edit-lock-sym]
   `{:make-uneditable
     (fn [this#]
