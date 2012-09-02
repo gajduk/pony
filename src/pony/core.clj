@@ -202,7 +202,7 @@
 (set! *warn-on-reflection* true)
 
 (let [m (make-matrix 4 3)
-      mc (wrap-colt-matrix  (copy m))
+      mc (copy m)
       assigned-m
       (-> m
           transient
