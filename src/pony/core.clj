@@ -17,11 +17,23 @@
 ;; TODO: protocol for matrices.
 
 (defprotocol IEditable
-  (make-uneditable [this])
-  (make-editable [this])
-  (ensure-editable [this])
-  (copy [this] "Make a deep copy and create a new lock"))
+  (make-uneditable [this]
+    "Release the object for editing by setting edit-thread atomically
+  to nil")
+  (ensure-editable [this]
+    "All write operations should ensure-editable: that the edit-thread
+  is set to current thread, so no one else is reading/writing.")
+  (ensure-readable [this]
+    "All read operations should ensure-readaoble: that edit-thread is
+  set to nil or to current thread, so there are no phantom reads.")
+  (copy [this] "Make a deep copy and create a new lock set to nil")
+  (copy-for-current-thread [this]
+    "Make a deep copy and create a new lock set to current thread"))
 
+;; Need to provide wrapper functions for read functions and write
+;; functions.
+
+;; Need to figure out how to use/handle views.
 (defmacro make-editable-type-fns [edit-lock-sym]
   `{:make-uneditable
     (fn [this#]
@@ -34,27 +46,24 @@
              nil nil
              (throw
               (IllegalAccessError.
-               "make-uneditable called by non-owner thread")))))))
-    :make-editable
-    (fn [this#]
-      (swap!
-       (. this# ~edit-lock-sym)
-       (fn [owner-thread#]
-         (let [curr-thread# (Thread/currentThread)]
-           (condp = owner-thread#
-             curr-thread# curr-thread#
-             nil curr-thread#
-             (throw (IllegalAccessError.
-                     "Transient used by non-owner thread")))))))
+               "make-uneditable called by non-owner thread"))))))
+      this#)
     :ensure-editable
     (fn [this#]
       (condp = @(. this# ~edit-lock-sym)
         (Thread/currentThread) true
         nil
         (throw (IllegalAccessError.
-                "Transient method called on persistent matrix"))
+                "Transient method called on persistent data"))
         (throw (IllegalAccessError.
-                "Transient used by non-owner thread"))))})
+                "Transient used by non-owner thread"))))
+    :ensure-readable
+    (fn [this#]
+      (condp = @(. this# ~edit-lock-sym)
+        (Thread/currentThread) true
+        nil true
+        (throw (IllegalAccessError.
+                "Transient is not readable"))))})
 
 (declare make-matrix-from-matrix)
 
@@ -63,15 +72,13 @@
    persistent-col-fns
    ifaces & body]
   `(do
-     (deftype ~name [~locked-member edit-lock#]
+     (deftype ~name [~locked-member ~'edit-lock]
        IEditableCollection
        (asTransient [this#]
-         (do (make-editable this#)
-             this#))
+         (copy-for-current-thread this#))
        ITransientCollection
        (persistent [this#]
-         (do (make-uneditable this#)
-             this#))
+         (make-uneditable this#))
        ;; conj is no-op
        (conj [this# _#] this#)
        IPersistentCollection
@@ -80,13 +87,24 @@
      (extend
          ~name IEditable
          (merge
-          (make-editable-type-fns edit-lock#)
-          {:copy
-           (fn [this#]
-             (let [locked-member-deep-copy# (deep-copy this#)]
-               (new ~name locked-member-deep-copy# (atom nil))))}))
+          (make-editable-type-fns ~'edit-lock)
+          (letfn
+              [(copy-for-thread# [thread# editable#]
+                (let [locked-member-deep-copy# (deep-copy editable#)]
+                  (new ~name locked-member-deep-copy#
+                       (atom thread#))))]
+            {:copy (partial copy-for-thread# nil)
+             :copy-for-current-thread
+             (partial copy-for-thread# (Thread/currentThread))})))
      ~(when body `(extend-type ~name ~@body))
      ~name))
+
+(defmacro with-editable [o & body]
+  `(do (ensure-editable ~o)
+       ~@body))
+(defmacro with-readable [o & body]
+  `(do (ensure-readable ~o)
+       ~@body))
 
 (defn type-hinted-param [cls x]
   (with-meta x {:tag cls}))
@@ -101,17 +119,22 @@
 (def matrix-impl
   {:assign
    (fn [this value]
-     (do (ensure-editable this)
-         (.assign (.m this) value)
-         this))
+     (with-editable this
+       (.assign (.m this) value)
+       this))
    :to-string
-   (fn [this] (.toString (.m this)))
+   (fn [this]
+     (with-readable this
+       (.toString (.m this))))
    :deep-copy
-   (fn [this] (.copy (.m this)))
+   (fn [this]
+     (with-readable this
+       (.copy (.m this))))
    :arg-matmax
    (fn [this]
-     (let [[max & coords] (.getMaxLocation (.m this))]
-       [max (map long coords)]))})
+     (with-readable this
+       (let [[max & coords] (.getMaxLocation (.m this))]
+         [max (map long coords)])))})
 
 (defprotocol Matrix1D
   (dot-prod [this ^Matrix1D that])
@@ -119,39 +142,46 @@
 
 (def-editable-type PonyMatrix1D m
   [;; cons is no-op
-   (cons [this o] this)
+   (cons [this o]
+         (with-readable this
+           this))
    (empty [_] nil)
    (equiv [this o]
-          (let [matrix (.m this)]
-            (when (instance? AbstractMatrix1D o)
-              (and (= (.size matrix) (.size o))
-                   (every?
-                    (fn [i]
-                      (= (.index matrix i) (.index o i)))
-                    (range (.size matrix)))))))]
-  [Counted (count [this] (.size (.m this)))]
+          (with-readable this
+            (let [matrix (.m this)]
+              (when (instance? AbstractMatrix1D o)
+                (with-readable o
+                  (and (= (.size matrix) (.size o))
+                       (every?
+                        (fn [i]
+                          (= (.index matrix i) (.index o i)))
+                        (range (.size matrix)))))))))]
+  [Counted
+   (count [this] (with-readable this (.size (.m this))))]
   Matrix1D
-  (dot-prod [this that] (.zDotProduct (.m this) that))
-  (sum [this] (.zSum (.m this))))
+  (dot-prod [this that] (with-readable (.zDotProduct (.m this) that)))
+  (sum [this] (with-readable (.zSum (.m this)))))
 (extend PonyMatrix1D Matrix matrix-impl)
 
 ;; (defprotocol Matrix2D [])
 (def-editable-type PonyMatrix2D m
   [ ;; cons is no-op
-   (cons [this o] this)
+   (cons [this o] (with-readable this this))
    (empty [_] nil)
    (equiv [this o]
-          (let [matrix (.m this)]
-            (when (instance? AbstractMatrix2D o)
-              (and (= (.rows matrix) (.rows o))
-                   (= (.columns matrix) (.columns o))
-                   (every?
-                    (fn [[r c]]
-                      (= (.get matrix r c)
-                         (.get o r c)))
-                    (for [r (range (.rows matrix))
-                          c (range (.columns matrix))]
-                      [r c]))))))]
+          (with-readable this
+            (let [matrix (.m this)]
+              (when (instance? AbstractMatrix2D o)
+                (with-readable o
+                  (and (= (.rows matrix) (.rows o))
+                       (= (.columns matrix) (.columns o))
+                       (every?
+                        (fn [[r c]]
+                          (= (.get matrix r c)
+                             (.get o r c)))
+                        (for [r (range (.rows matrix))
+                              c (range (.columns matrix))]
+                          [r c]))))))))]
   [Counted
    (count [this]
           (let [matrix (.m this)
@@ -169,10 +199,15 @@
 (set! *warn-on-reflection* true)
 
 (let [m (make-matrix 4 3)
-      mc (make-matrix-from-matrix  (copy m))]
-  (-> m
-      transient
-      (assign 1.0)
-      persistent!)
+      mc (make-matrix-from-matrix  (copy m))
+      assigned-m
+      (-> m
+          transient
+          (assign 1.0)
+          persistent!)]
+  (println (. m edit-lock))
+  (println (. mc edit-lock))
+  (println (. assigned-m edit-lock))
   (println (to-string m))
-  (println (to-string mc)))
+  (println (to-string mc))
+  (println (to-string assigned-m)))
