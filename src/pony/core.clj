@@ -65,8 +65,6 @@
         (throw (IllegalAccessError.
                 "Transient is not readable"))))})
 
-(declare make-matrix-from-matrix)
-
 (defmacro def-editable-type
   [name locked-member
    persistent-col-fns
@@ -140,7 +138,7 @@
   (dot-prod [this ^Matrix1D that])
   (sum [this]))
 
-(def-editable-type PonyMatrix1D m
+(def-editable-type PonyMatrix1D ^AbstractMatrix2D m
   [;; cons is no-op
    (cons [this o]
          (with-readable this
@@ -164,7 +162,7 @@
 (extend PonyMatrix1D Matrix matrix-impl)
 
 ;; (defprotocol Matrix2D [])
-(def-editable-type PonyMatrix2D m
+(def-editable-type PonyMatrix2D ^AbstractMatrix2D m
   [ ;; cons is no-op
    (cons [this o] (with-readable this this))
    (empty [_] nil)
@@ -189,17 +187,28 @@
             (* rows cols)))])
 (extend PonyMatrix2D Matrix matrix-impl)
 
-(defn make-matrix-from-matrix [^AbstractMatrix2D m]
-  (PonyMatrix2D. m (atom nil)))
+(defprotocol ColtMatrix
+  (wrap-colt-matrix [^AbstractMatrix colt-matrix]
+    "Wrap colt matrix in a pony matrix"))
+
+(extend-type AbstractMatrix1D
+  ColtMatrix
+  (wrap-colt-matrix [colt-matrix]
+    (PonyMatrix1D. colt-matrix (atom nil))))
+
+(extend-type AbstractMatrix2D
+  ColtMatrix
+  (wrap-colt-matrix [colt-matrix]
+    (PonyMatrix2D. colt-matrix (atom nil))))
 
 (defn make-matrix [^long rows ^long cols]
   (let [m (DenseDoubleMatrix2D. rows cols)]
-    (make-matrix-from-matrix m)))
+    (wrap-colt-matrix m)))
 
 (set! *warn-on-reflection* true)
 
 (let [m (make-matrix 4 3)
-      mc (make-matrix-from-matrix  (copy m))
+      mc (wrap-colt-matrix  (copy m))
       assigned-m
       (-> m
           transient
