@@ -103,14 +103,14 @@
 
 (defprotocol Matrix
   "Matrices,dense or sparse and float or double and 1D, 2D or 3D."
-  (assign [this value] "Assign value to all cells in matrix")
+  (assign! [this value] "Assign value to all cells in matrix")
   (to-string [this] "Print the matrix")
   (as-array [this] "Copy the matrix into an array")
   (deep-copy [this] "Make a deep copy of the underlying matrix")
   (arg-matmax [this]))
 
 (def matrix-impl
-  {:assign
+  {:assign!
    (fn [this value]
      (with-editable this
        (.assign (.m this) value)

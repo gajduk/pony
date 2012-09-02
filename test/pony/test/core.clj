@@ -7,6 +7,6 @@
         assigned-m
         (-> m
             transient
-            (assign 1.0)
+            (assign! 1.0)
             persistent!)]
     (is (every? #(= %1 1.0) (flatten (seq assigned-m))))))
