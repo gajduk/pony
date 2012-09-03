@@ -12,12 +12,10 @@
 
 (defn has-editable-flags [m {:keys [readable editable]}]
   (do
-    (is-edit-lock
-     m
-     (cond
-      (and readable (not editable)) nil
-      (and readable editable) (Thread/currentThread)
-      :else (throw "Invalid combination of readable/editable flags")))
+    (cond
+     (and readable (not editable)) (is-edit-lock m nil)
+     (and readable editable) (Thread/currentThread)
+     :else true)
     (if readable
       (is (ensure-readable m))
       (is (thrown? IllegalAccessError (ensure-readable m))))
@@ -50,7 +48,33 @@
     (has-editable-flags ttm {:readable true :editable true})))
 
 (deftest editable-multi-thread-test
-  (is true))
+  (let [m (make-matrix 4 3)
+        a (agent m)
+        check-every-equals-val
+        (fn [m val]
+          (is (every? #(= %1 val) (flatten (seq m)))))]
+    (check-every-equals-val m 0.0)
+    (send-off
+     a
+     (fn [m]
+       (has-editable-flags m {:readable true :editable false})
+       '(check-every-equals-val m 0.0)
+       (let [tm (-> m transient (assign! 1.0))]
+         (has-editable-flags tm {:readable true :editable true})
+         (check-every-equals-val tm 1.0)
+         (let [pm (persistent! tm)]
+           (has-editable-flags pm {:readable true :editable false})
+           (check-every-equals-val pm 1.0)
+           (list tm pm)))))
+    (await a)
+    (has-editable-flags m {:readable true :editable false})
+    (check-every-equals-val m 0.0)
+    (let [[tm pm] @a]
+      ;; Transient is now readable by all threads because persistent!
+      ;; was called on it to make it uneditable again.
+      (has-editable-flags tm {:readable true :editable false})
+      (has-editable-flags pm {:readable true :editable false})
+      (check-every-equals-val pm 1.0))))
 
 ;;; Tests for Matrix protocol
 ;; Use extenders function to test every extender of the protocol

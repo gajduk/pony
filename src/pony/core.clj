@@ -60,7 +60,9 @@
         (Thread/currentThread) true
         nil
         (throw (IllegalAccessError.
-                "Transient method called on persistent data"))
+                (format "Transient method called %s or %s"
+                        "on transient after call to persistent!"
+                        "on persistent data")))
         (throw (IllegalAccessError.
                 "Transient used by non-owner thread"))))
     :ensure-readable
