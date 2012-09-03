@@ -7,10 +7,13 @@
 
 (ns pony.core
   (:import
-   [clojure.lang Counted IPersistentCollection IEditableCollection ITransientCollection]
+   [clojure.lang Counted
+    IPersistentCollection IEditableCollection ITransientCollection]
    [cern.colt.matrix AbstractMatrix AbstractMatrix1D AbstractMatrix2D]
    [cern.colt.matrix.tdouble DoubleMatrix2D]
-   [cern.colt.matrix.tdouble.impl DenseDoubleMatrix1D DenseDoubleMatrix2D]
+   [cern.colt.matrix.tdouble.impl
+    DenseDoubleMatrix1D DenseDoubleMatrix2D
+    SparseDoubleMatrix1D SparseDoubleMatrix2D]
    [cern.colt.matrix.tfloat FloatMatrix2D]
    [cern.colt.matrix.tfloat.impl DenseFloatMatrix2D]))
 
@@ -236,8 +239,15 @@
   (wrap-colt-matrix [colt-matrix]
     (PonyMatrix2D. colt-matrix (atom nil))))
 
-(defn make-matrix [^long rows ^long cols]
-  (let [m (DenseDoubleMatrix2D. rows cols)]
-    (wrap-colt-matrix m)))
+;;; Matrix constructor functions
+(defn make-dense-matrix
+  ([^long size] (-> size DenseDoubleMatrix1D. wrap-colt-matrix))
+  ([^long rows ^long cols]
+     (-> (DenseDoubleMatrix2D. rows cols) wrap-colt-matrix)))
+
+(defn make-sparse-matrix
+  ([^long size] (-> size SparseDoubleMatrix1D. wrap-colt-matrix))
+  ([^long rows ^long cols]
+     (-> (SparseDoubleMatrix2D. rows cols) wrap-colt-matrix)))
 
 (set! *warn-on-reflection* true)

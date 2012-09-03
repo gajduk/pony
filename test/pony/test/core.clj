@@ -24,31 +24,31 @@
       (is (thrown? IllegalAccessError (ensure-editable m))))))
 
 (deftest editable-single-thread-test
-  (let [m (make-matrix 4 3)]
+  (let [m (make-dense-matrix 4 3)]
     (is-edit-lock m nil)
     (has-editable-flags m {:readable true :editable false}))
-  (let [m (-> (make-matrix 4 3) transient)]
+  (let [m (-> (make-dense-matrix 4 3) transient)]
     (has-editable-flags m {:readable true :editable true}))
-  (let [m (-> (make-matrix 4 3) transient (assign! 1.0) persistent!)]
+  (let [m (-> (make-dense-matrix 4 3) transient (assign! 1.0) persistent!)]
     (has-editable-flags m {:readable true :editable false}))
 
-  (let [m (make-matrix 4 3)
+  (let [m (make-dense-matrix 4 3)
         pm (persistent! m)]
     (has-editable-flags m {:readable true :editable false})
     (has-editable-flags pm {:readable true :editable false}))
 
-  (let [m (make-matrix 4 3)
+  (let [m (make-dense-matrix 4 3)
         tm (transient m)]
     (has-editable-flags m {:readable true :editable false})
     (has-editable-flags tm {:readable true :editable true}))
 
-  (let [tm (transient (make-matrix 4 3))
+  (let [tm (transient (make-dense-matrix 4 3))
         ttm (transient tm)]
     (has-editable-flags tm {:readable true :editable true})
     (has-editable-flags ttm {:readable true :editable true})))
 
 (deftest editable-multi-thread-test
-  (let [m (make-matrix 4 3)
+  (let [m (make-dense-matrix 4 3)
         a (agent m)
         check-every-equals-val
         (fn [m val]
@@ -80,7 +80,7 @@
 ;; Use extenders function to test every extender of the protocol
 (deftest assign!-test
   (is
-   (let [m (make-matrix 4 3)
+   (let [m (make-dense-matrix 4 3)
          assigned-m
          (-> m
              transient
