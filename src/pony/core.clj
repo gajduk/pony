@@ -102,13 +102,13 @@
           ;; then sets the edit thread to the current thread. This is
           ;; how mutable copies of the editable type are created.
           (letfn
-              [(copy-for-thread# [thread# editable#]
-                (let [locked-member-deep-copy# (deep-copy editable#)]
-                  (new ~name locked-member-deep-copy#
-                       (atom thread#))))]
-            {:copy (partial copy-for-thread# nil)
+              [(copy-for-thread# [editable# thread#]
+                 (let [locked-member-deep-copy# (deep-copy editable#)]
+                   (new ~name locked-member-deep-copy#
+                        (atom thread#))))]
+            {:copy (fn [editable#] (copy-for-thread# editable# nil))
              :copy-for-current-thread
-             (partial copy-for-thread# (Thread/currentThread))})))
+             (fn [editable#] (copy-for-thread# editable# (Thread/currentThread)))})))
      ~(when body `(extend-type ~name ~@body))
      ~name))
 
