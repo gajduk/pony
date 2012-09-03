@@ -128,7 +128,8 @@
   (to-string [this] "Print the matrix")
   (as-array [this] "Copy the matrix into an array")
   (deep-copy [this] "Make a deep copy of the underlying matrix")
-  (arg-matmax [this]))
+  (arg-matmax [this])
+  (normalize! [this]))
 
 (def matrix-impl
   {:assign!
