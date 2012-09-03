@@ -5,19 +5,28 @@
 ;;; Tests for editable types
 ;;; TODO: Check memory addresses to make sure copies are done when
 ;;; expected, and not done when not expected.
-;;; TODO: Check owner thread and make sure that it is set to or to the
-;;; appropriate thread.
+;;; TODO: Check owner thread and make sure that it is set to nil or to
+;;; the appropriate thread.
+(defn is-edit-lock [m val]
+  (is (= @(. m edit-lock) val)))
+
 (defmacro has-editable-flags [m {:keys [readable editable]}]
-  `(and
-    (is ~(if readable
-           `(ensure-readable ~m)
-           `(thrown? IllegalAccessError (ensure-readable ~m))))
-    (is ~(if readable
-           `(ensure-readable ~m)
-           `(thrown? IllegalAccessError (ensure-readable ~m))))))
+  `(do
+    ~(when editable `(is-edit-lock ~m (Thread/currentThread)))
+    ~(when (and readable (not editable)) `(is-edit-lock ~m nil))
+    ~(if readable
+      `(is (ensure-readable ~m))
+      `(is (thrown? IllegalAccessError (ensure-readable ~m))))
+
+    ~(if editable
+      `(is (ensure-editable ~m))
+      `(is (thrown? IllegalAccessError (ensure-editable ~m))))))
 
 (deftest editable-single-thread-test
   (let [m (make-matrix 4 3)]
+    (is-edit-lock m nil)
+    (is (ensure-readable m))
+    (is (thrown? IllegalAccessError (ensure-editable m)))
     (has-editable-flags m {:readable true :editable false}))
   (let [m (-> (make-matrix 4 3) transient)]
     (has-editable-flags m {:readable true :editable true}))
