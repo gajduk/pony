@@ -10,23 +10,24 @@
 (defn is-edit-lock [m val]
   (is (= @(. m edit-lock) val)))
 
-(defmacro has-editable-flags [m {:keys [readable editable]}]
-  `(do
-    ~(when editable `(is-edit-lock ~m (Thread/currentThread)))
-    ~(when (and readable (not editable)) `(is-edit-lock ~m nil))
-    ~(if readable
-      `(is (ensure-readable ~m))
-      `(is (thrown? IllegalAccessError (ensure-readable ~m))))
-
-    ~(if editable
-      `(is (ensure-editable ~m))
-      `(is (thrown? IllegalAccessError (ensure-editable ~m))))))
+(defn has-editable-flags [m {:keys [readable editable]}]
+  (do
+    (is-edit-lock
+     m
+     (cond
+      (and readable (not editable)) nil
+      (and readable editable) (Thread/currentThread)
+      :else (throw "Invalid combination of readable/editable flags")))
+    (if readable
+      (is (ensure-readable m))
+      (is (thrown? IllegalAccessError (ensure-readable m))))
+    (if editable
+      (is (ensure-editable m))
+      (is (thrown? IllegalAccessError (ensure-editable m))))))
 
 (deftest editable-single-thread-test
   (let [m (make-matrix 4 3)]
     (is-edit-lock m nil)
-    (is (ensure-readable m))
-    (is (thrown? IllegalAccessError (ensure-editable m)))
     (has-editable-flags m {:readable true :editable false}))
   (let [m (-> (make-matrix 4 3) transient)]
     (has-editable-flags m {:readable true :editable true}))
